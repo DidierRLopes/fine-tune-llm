@@ -1,0 +1,6 @@
+mlx-lm
+matplotlib
+datasets
+tqdm
+requests
+python-dotenv
