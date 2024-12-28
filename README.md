@@ -6,27 +6,27 @@ The process shows how to adapt a large language model for a specific task while 
 
 ## What's Actually Happening Here
 
-1. **Dataset Preparation**
+### 1. Dataset Preparation
 
 - Uses a blog Q&A dataset containing conversations about blog posts
 - Splits the data into train/validation/test sets (70/20/10 split)
 - Formats conversations into question-answer pairs for training
 
-2. **Model Adaptation**
+### 2. Model Adaptation
 
 - Uses LoRA to efficiently fine-tune the model by only modifying a small number of parameters
 - Adapts only the attention layers (query, key, value matrices) in the top 8 transformer blocks
 - Uses a low rank of 8 to keep the number of trainable parameters small
 - Implements dropout (0.2) to prevent overfitting
 
-3. **Training Process**
+### 3. Training Process
 
 - Runs for 500 iterations with evaluation every 100 steps
 - Uses Adam optimizer with a conservative learning rate (5e-6)
 - Tracks both training and validation losses to monitor progress
 - Saves adapter weights periodically
 
-4. **Evaluation Approach**
+### 4. Evaluation Approach
 
 - Uses LLaMA 3.2 as an independent judge to evaluate responses
 - Compares semantic similarity between model outputs and ground truth
@@ -35,7 +35,7 @@ The process shows how to adapt a large language model for a specific task while 
   - Distribution of good (≥0.7) vs poor (≤0.3) responses
   - Performance comparison with the base model
 
-5. **Model Export**
+### 5. Model Export
 
 - Fuses LoRA adapters into the base model for deployment
 - Uploads the resulting model to Hugging Face for sharing
