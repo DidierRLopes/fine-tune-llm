@@ -4,3 +4,6 @@ datasets
 tqdm
 requests
 python-dotenv
+evaluate
+bert-score
+scikit-learn
