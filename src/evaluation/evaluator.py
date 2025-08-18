@@ -381,10 +381,10 @@ class ModelEvaluator:
         Returns:
             Dictionary with all evaluation results and comparison
         """
-        print("\n" + "="*80)
+        print("\n" + "="*60)
         print("COMPREHENSIVE MODEL COMPARISON")
         print("Base Model vs Runtime LoRA vs Fused Model")
-        print("="*80)
+        print("="*60)
         
         results = {}
         model_names = []

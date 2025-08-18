@@ -90,9 +90,9 @@ class AdapterFusion:
         """
         errors = []
         
-        # Check base model path
-        if not Path(base_model_path).exists():
-            errors.append(f"Base model path does not exist: {base_model_path}")
+        # Check base model path (allow HuggingFace model IDs)
+        if not (Path(base_model_path).exists() or self._is_huggingface_model_id(base_model_path)):
+            errors.append(f"Base model path does not exist and is not a valid HuggingFace model ID: {base_model_path}")
         
         # Check adapter path
         adapter_dir = Path(adapter_path)
@@ -117,6 +117,25 @@ class AdapterFusion:
         
         print("✅ Fusion inputs validated successfully")
         return True
+    
+    def _is_huggingface_model_id(self, model_path: str) -> bool:
+        """Check if the path looks like a HuggingFace model ID.
+        
+        Args:
+            model_path: Model path or ID to check
+            
+        Returns:
+            True if it looks like a HuggingFace model ID
+        """
+        # HuggingFace model IDs typically have format: username/model-name or organization/model-name
+        # They don't start with / or contain path separators like local paths
+        return (
+            '/' in model_path and 
+            not model_path.startswith('/') and 
+            not model_path.startswith('./') and
+            not model_path.startswith('../') and
+            len(model_path.split('/')) == 2
+        )
     
     def compare_fusion_quality(self, original_model_path: str, fused_model_path: str,
                              test_prompts: Optional[list] = None) -> dict:

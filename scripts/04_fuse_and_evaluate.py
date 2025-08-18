@@ -70,9 +70,9 @@ def main():
     
     args = parser.parse_args()
     
-    print("="*80)
+    print("="*60)
     print("FUSION AND COMPREHENSIVE EVALUATION PIPELINE")
-    print("="*80)
+    print("="*60)
     print("This script: 1) Fuses adapters  2) Evaluates Base + Runtime + Fused")
     
     # Load model configuration
@@ -170,9 +170,9 @@ def main():
             test_data_path=args.test_data
         )
         
-        print("\n" + "="*80)
+        print("\n" + "="*60)
         print("PIPELINE COMPLETED SUCCESSFULLY!")
-        print("="*80)
+        print("="*60)
         
         # Print summary
         models_evaluated = list(results.keys())
@@ -193,11 +193,6 @@ def main():
         
         print(f"\n📁 Detailed results saved to: logs/evaluation/")
         print(f"📁 Fused model available at: {output_path}")
-        
-        print("\n🎉 You can now:")
-        print("  - Use the fused model for inference")
-        print("  - Upload to HuggingFace with '05_upload_model.py'")
-        print("  - Chat with your model using 'interactive_chat.py'")
         
     except Exception as e:
         print(f"\n❌ Evaluation failed: {e}")

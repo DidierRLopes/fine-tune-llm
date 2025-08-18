@@ -1,39 +1,203 @@
 #!/usr/bin/env python3
 """
-Model upload script for fine-tuning pipeline.
-Uploads fused model to HuggingFace Hub.
+Upload LoRA adapters to HuggingFace Hub.
+Specialized script for uploading MLX LoRA adapter weights.
 """
 
+import os
 import sys
 import argparse
-import os
+import json
 from pathlib import Path
-
-# Add src to path for imports
-sys.path.append(str(Path(__file__).parent.parent / "src"))
-
 from huggingface_hub import HfApi, create_repo
 from dotenv import load_dotenv
 
 
+def validate_adapter_structure(adapter_path: Path) -> tuple[bool, list, float]:
+    """Validate LoRA adapter directory structure.
+    
+    Args:
+        adapter_path: Path to adapter directory
+        
+    Returns:
+        Tuple of (is_valid, missing_files, total_size_mb)
+    """
+    required_files = [
+        "adapter_config.json",
+        "config.json",
+        "adapters.safetensors"
+    ]
+    
+    missing_files = []
+    for file in required_files:
+        if not (adapter_path / file).exists():
+            missing_files.append(file)
+    
+    # Calculate total size
+    total_size = 0
+    for file in adapter_path.glob("*.safetensors"):
+        total_size += file.stat().st_size
+    for file in adapter_path.glob("*.json"):
+        total_size += file.stat().st_size
+    
+    total_size_mb = total_size / (1024 * 1024)
+    
+    is_valid = len(missing_files) == 0
+    return is_valid, missing_files, total_size_mb
+
+
+def create_lora_model_card(adapter_path: Path, repo_name: str) -> str:
+    """Create a model card for LoRA adapters.
+    
+    Args:
+        adapter_path: Path to adapter directory
+        repo_name: HuggingFace repository name
+        
+    Returns:
+        Model card content as string
+    """
+    # Load adapter config
+    with open(adapter_path / "adapter_config.json", 'r') as f:
+        adapter_config = json.load(f)
+    
+    # Load config if exists
+    config = {}
+    config_path = adapter_path / "config.json"
+    if config_path.exists():
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    
+    base_model = config.get("base_model", adapter_config.get("base_model", "microsoft/Phi-3-mini-4k-instruct"))
+    
+    model_card = f"""---
+license: mit
+base_model: {base_model}
+tags:
+- lora
+- mlx
+- fine-tuned
+library_name: mlx
+---
+
+# LoRA Adapters for {base_model.split('/')[-1]}
+
+This repository contains LoRA adapter weights for fine-tuning {base_model} using MLX.
+
+## Model Details
+
+- **Base Model**: {base_model}
+- **Training Framework**: MLX
+- **Adapter Type**: LoRA (Low-Rank Adaptation)
+- **Trainable Parameters**: {config.get('trainable_params', 'N/A'):,} ({config.get('trainable_percent', 'N/A')}% of total)
+- **Total Model Parameters**: {config.get('total_params', 'N/A'):,}
+
+## LoRA Configuration
+
+- **Rank (r)**: {adapter_config.get('lora_parameters', {}).get('rank', 16)}
+- **Scale**: {adapter_config.get('lora_parameters', {}).get('scale', 20.0)}
+- **Dropout**: {adapter_config.get('lora_parameters', {}).get('dropout', 0.1)}
+- **Target Modules**: {', '.join(adapter_config.get('lora_parameters', {}).get('keys', []))}
+- **Number of Layers**: {adapter_config.get('lora_layers', 32)} (out of {adapter_config.get('num_layers', 32)} total)
+
+## Usage
+
+### Installation
+
+```bash
+pip install mlx-lm
+```
+
+### Loading the Adapters
+
+#### Option 1: Load from HuggingFace Hub
+
+```python
+from mlx_lm import load, generate
+from mlx_lm.tuner import linear_to_lora_layers
+from huggingface_hub import snapshot_download
+import json
+
+# Download adapters from HuggingFace
+adapter_path = snapshot_download(repo_id="{repo_name}")
+
+# Load base model
+model, tokenizer = load("{base_model}")
+
+# Load adapter config
+with open(f"{{adapter_path}}/adapter_config.json", "r") as f:
+    adapter_config = json.load(f)
+
+# Freeze base model and apply LoRA layers
+model.freeze()
+linear_to_lora_layers(
+    model, 
+    adapter_config["lora_layers"],
+    adapter_config["lora_parameters"]
+)
+
+# Load the LoRA weights
+model.load_weights(f"{{adapter_path}}/adapters.safetensors", strict=False)
+
+# Generate text
+prompt = "<|system|>\\nYou are a helpful assistant.<|end|>\\n<|user|>\\nHello!<|end|>\\n<|assistant|>"
+response = generate(model, tokenizer, prompt, max_tokens=200)
+print(response)
+```
+
+#### Option 2: Clone and Load Locally
+
+```bash
+git clone https://huggingface.co/{repo_name}
+cd {repo_name.split('/')[-1]}
+```
+
+Then use the same Python code above, replacing `adapter_path` with your local directory path.
+
+## Training Details
+
+These adapters were trained using:
+- **Framework**: MLX with LoRA fine-tuning
+- **Hardware**: Apple Silicon
+- **Training approach**: Parameter-efficient fine-tuning with gradient checkpointing
+
+## Files
+
+- `adapters.safetensors`: Final adapter weights
+- `adapter_config.json`: LoRA configuration
+- `config.json`: Training and model metadata
+- `*.safetensors`: Training checkpoint files (optional)
+
+## License
+
+These adapters are released under the MIT License. The base model may have its own license requirements.
+"""
+    
+    return model_card
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Upload fused model to HuggingFace Hub")
+    parser = argparse.ArgumentParser(description="Upload LoRA adapters to HuggingFace Hub")
     parser.add_argument(
-        "--model-path", 
+        "--adapter-path", 
         type=str, 
-        default="models/fused",
-        help="Path to fused model directory"
+        default="models/adapters",
+        help="Path to LoRA adapters directory (default: models/adapters)"
     )
     parser.add_argument(
         "--repo-name", 
         type=str, 
         required=True,
-        help="HuggingFace repository name (e.g., 'username/model-name')"
+        help="HuggingFace repository name (e.g., 'username/model-name-lora')"
     )
     parser.add_argument(
         "--private", 
         action="store_true",
         help="Make repository private"
+    )
+    parser.add_argument(
+        "--include-checkpoints",
+        action="store_true",
+        help="Include training checkpoint files (default: only final adapters)"
     )
     parser.add_argument(
         "--dry-run", 
@@ -49,7 +213,7 @@ def main():
     args = parser.parse_args()
     
     print("="*60)
-    print("MODEL UPLOAD PIPELINE")
+    print("LORA ADAPTER UPLOAD PIPELINE")
     print("="*60)
     
     # Load environment variables
@@ -67,150 +231,118 @@ def main():
         print("\nGet your token from: https://huggingface.co/settings/tokens")
         sys.exit(1)
     
-    # Check if model directory exists
-    model_path = Path(args.model_path)
-    if not model_path.exists():
-        print(f"❌ Model directory not found: {args.model_path}")
-        print("Run '04_fuse_adapters.py' first to create the fused model.")
+    # Check if adapter directory exists
+    adapter_path = Path(args.adapter_path)
+    if not adapter_path.exists():
+        print(f"❌ Adapter directory not found: {args.adapter_path}")
+        print("Run '02_train_model.py' first to train the model.")
         sys.exit(1)
     
-    print(f"Model path: {model_path}")
+    print(f"Adapter path: {adapter_path}")
     print(f"Repository: {args.repo_name}")
     print(f"Private: {args.private}")
+    print(f"Include checkpoints: {args.include_checkpoints}")
     print(f"Dry run: {args.dry_run}")
     
-    # Validate model structure
-    print("\nStep 1: Validating model structure...")
+    # Step 1: Validate adapter structure
+    print("\nStep 1: Validating adapter structure...")
     
-    required_files = ["config.json"]
-    model_files = list(model_path.glob("*.safetensors")) + list(model_path.glob("*.npz"))
-    
-    missing_files = []
-    for req_file in required_files:
-        if not (model_path / req_file).exists():
-            missing_files.append(req_file)
+    is_valid, missing_files, total_size = validate_adapter_structure(adapter_path)
     
     if missing_files:
-        print(f"⚠️  Warning: Missing recommended files: {missing_files}")
+        print(f"⚠️  Warning: Missing files: {missing_files}")
+        if "adapters.safetensors" in missing_files:
+            print("❌ Critical: adapters.safetensors not found!")
+            sys.exit(1)
     
-    if not model_files:
-        print("❌ No model weight files found (.safetensors or .npz)")
-        sys.exit(1)
+    # Count files to upload
+    files_to_upload = []
     
-    print(f"✅ Model validation passed")
-    print(f"  Found {len(model_files)} model weight files")
+    # Essential files
+    for file in ["adapter_config.json", "config.json", "adapters.safetensors"]:
+        file_path = adapter_path / file
+        if file_path.exists():
+            files_to_upload.append(file_path)
     
-    # Calculate total size
-    total_size = sum(f.stat().st_size for f in model_path.rglob("*") if f.is_file())
-    total_size_mb = total_size / (1024 * 1024)
-    print(f"  Total model size: {total_size_mb:.1f} MB")
+    # Optional checkpoint files
+    if args.include_checkpoints:
+        checkpoint_files = list(adapter_path.glob("*_adapters.safetensors"))
+        files_to_upload.extend(checkpoint_files)
+        print(f"  Including {len(checkpoint_files)} checkpoint files")
+    
+    print(f"✅ Adapter validation passed")
+    print(f"  Files to upload: {len(files_to_upload)}")
+    print(f"  Total size: {total_size:.1f} MB")
     
     if args.dry_run:
-        print("\n🔍 DRY RUN MODE - No files will be uploaded")
-        print("✅ Model structure validation completed")
-        print(f"Ready to upload {len(list(model_path.rglob('*')))} files to {args.repo_name}")
-        return
+        print("\n✅ Dry run completed successfully!")
+        print("Files that would be uploaded:")
+        for file in files_to_upload:
+            print(f"  - {file.name} ({file.stat().st_size / 1024 / 1024:.1f} MB)")
+        sys.exit(0)
     
-    # Initialize HuggingFace API
+    # Step 2: Initialize HuggingFace API
     print("\nStep 2: Initializing HuggingFace API...")
+    
     try:
         api = HfApi(token=hf_token)
-        
-        # Test token by getting user info
         user_info = api.whoami()
         print(f"✅ Authenticated as: {user_info['name']}")
-        
     except Exception as e:
         print(f"❌ Authentication failed: {e}")
-        print("Please check your HuggingFace token.")
         sys.exit(1)
     
-    # Create repository
+    # Step 3: Create or get repository
     print("\nStep 3: Creating repository...")
+    
     try:
-        repo_info = create_repo(
+        repo_url = create_repo(
             repo_id=args.repo_name,
-            token=hf_token,
             private=args.private,
-            exist_ok=True
+            token=hf_token,
+            exist_ok=True,
+            repo_type="model"
         )
-        print(f"✅ Repository ready: {repo_info}")
-        
+        print(f"✅ Repository ready: {repo_url}")
     except Exception as e:
         print(f"❌ Repository creation failed: {e}")
         sys.exit(1)
     
-    # Create model card
+    # Step 4: Create model card
     print("\nStep 4: Creating model card...")
+    
     try:
-        model_card_content = f\"\"\"---
-license: mit
-base_model: microsoft/Phi-3-mini-4k-instruct
-tags:
-- fine-tuned
-- lora
-- mlx
----
-
-# Fine-tuned Phi-3 Mini Model
-
-This model is a fine-tuned version of microsoft/Phi-3-mini-4k-instruct using LoRA (Low-Rank Adaptation) and MLX.
-
-## Model Details
-
-- **Base Model**: microsoft/Phi-3-mini-4k-instruct
-- **Fine-tuning Method**: LoRA with MLX
-- **Model Size**: {total_size_mb:.1f} MB
-
-## Usage
-
-```python
-from mlx_lm import load, generate
-
-# Load the model
-model, tokenizer = load("{args.repo_name}")
-
-# Generate text
-prompt = "<|system|>\\nYou are a helpful assistant.<|end|>\\n<|user|>\\nHello!<|end|>\\n<|assistant|>"
-response = generate(model, tokenizer, prompt, max_tokens=100)
-print(response)
-```
-
-## Training
-
-This model was fine-tuned using the MLX framework with LoRA adapters. The training process involved:
-
-1. Data preprocessing and validation
-2. LoRA configuration and setup
-3. Fine-tuning with custom training loop
-4. Adapter fusion into base model
-
-## License
-
-This model is released under the MIT license.
-\"\"\"
-
-        model_card_path = model_path / "README.md"
+        model_card_content = create_lora_model_card(adapter_path, args.repo_name)
+        
+        model_card_path = adapter_path / "README.md"
         with open(model_card_path, 'w') as f:
             f.write(model_card_content)
+        
+        files_to_upload.append(model_card_path)
         
         print(f"✅ Model card created: {model_card_path}")
         
     except Exception as e:
         print(f"⚠️  Warning: Could not create model card: {e}")
     
-    # Upload model
-    print("\nStep 5: Uploading model files...")
+    # Step 5: Upload files
+    print("\nStep 5: Uploading adapter files...")
+    
     try:
-        print(f"Uploading {len(list(model_path.rglob('*')))} files...")
+        print(f"Uploading {len(files_to_upload)} files...")
         
-        # Upload the entire directory
-        api.upload_folder(
-            folder_path=str(model_path),
-            repo_id=args.repo_name,
-            repo_type="model",
-            token=hf_token
-        )
+        # Upload all files
+        for file_path in files_to_upload:
+            relative_path = file_path.name
+            print(f"  Uploading {relative_path}... ", end="")
+            
+            api.upload_file(
+                path_or_fileobj=str(file_path),
+                path_in_repo=relative_path,
+                repo_id=args.repo_name,
+                token=hf_token
+            )
+            print("✅")
         
         print(f"✅ Upload completed successfully!")
         
@@ -218,26 +350,27 @@ This model is released under the MIT license.
         print(f"❌ Upload failed: {e}")
         sys.exit(1)
     
-    # Verify upload
+    # Step 6: Verify upload
     print("\nStep 6: Verifying upload...")
+    
     try:
-        repo_files = api.list_repo_files(args.repo_name, token=hf_token)
-        print(f"✅ Upload verified: {len(repo_files)} files in repository")
-        
+        files = api.list_repo_files(repo_id=args.repo_name, token=hf_token)
+        print(f"✅ Upload verified: {len(files)} files in repository")
     except Exception as e:
         print(f"⚠️  Warning: Could not verify upload: {e}")
     
+    # Success message
     print("\n" + "="*60)
-    print("MODEL UPLOAD COMPLETED SUCCESSFULLY!")
+    print("LORA ADAPTER UPLOAD COMPLETED SUCCESSFULLY!")
     print("="*60)
-    print(f"🎉 Model uploaded to: https://huggingface.co/{args.repo_name}")
-    print("\nYour model is now available for:")
-    print("  - Direct download and usage")
-    print("  - Integration with transformers library")
+    print(f"🎉 Adapters uploaded to: https://huggingface.co/{args.repo_name}")
+    print("\nYour LoRA adapters are now available for:")
+    print("  - Direct download and usage with MLX")
+    print("  - Integration with base models")
     print("  - Sharing with the community")
     print("\nExample usage:")
-    print(f'  from mlx_lm import load')
-    print(f'  model, tokenizer = load("{args.repo_name}")')
+    print(f"  from mlx_lm.tuner import load_adapters")
+    print(f"  model = load_adapters(base_model, '{args.repo_name}')")
     print("="*60)
 
 
