@@ -38,8 +38,8 @@ fine-tune-llm/
 │   ├── 02_train_model.py   # LoRA fine-tuning with validation
 │   ├── 03_evaluate_model.py # Evaluate base + runtime adapters
 │   ├── 04_fuse_and_evaluate.py # Fusion + comprehensive evaluation
-│   ├── 05_upload_model.py  # HuggingFace upload
-│   └── interactive_chat.py # Chat interface
+│   ├── upload_model_to_hf.py # Upload LoRA adapters to HuggingFace
+│   └── interactive_chat.py # Chat interface with comparison mode
 ├── data/                   # Data storage
 ├── models/                 # Model storage
 ├── logs/                   # Training and evaluation logs
@@ -85,7 +85,7 @@ python scripts/03_evaluate_model.py
 python scripts/04_fuse_and_evaluate.py
 
 # Step 5: Upload to HuggingFace (optional)
-python scripts/05_upload_model.py --repo-name "your-username/your-model"
+python scripts/upload_model_to_hf.py --repo-name "your-username/your-model"
 ```
 
 ### 4. Test Your Model
@@ -93,9 +93,6 @@ python scripts/05_upload_model.py --repo-name "your-username/your-model"
 ```bash
 # Interactive chat
 python scripts/interactive_chat.py
-
-# Quick test
-python scripts/interactive_chat.py --quick-test
 ```
 
 ## 📊 Configuration Examples
@@ -142,9 +139,12 @@ python scripts/01_prepare_data.py \
   --output-dir data/processed
 ```
 
-- `--data-config`: Dataset configuration (source, formatting, splits)
-- `--model-config`: Model configuration (needed for tokenizer)
-- `--output-dir`: Where to save processed data files
+- `--data-config`: Dataset configuration file (default: config/data_config.yaml)
+- `--model-config`: Model configuration file (default: config/model_config.yaml)  
+- `--output-dir`: Where to save processed data files (default: data/processed)
+- `--dataset-name`: Override dataset name from config
+- `--dataset-subset`: Dataset subset to use
+- `--max-samples`: Limit number of samples to process
 
 ### 02_train_model.py  
 **Purpose**: Fine-tune model using LoRA adapters with validation
@@ -166,11 +166,12 @@ python scripts/02_train_model.py \
   --output-dir models/adapters
 ```
 
-- `--model-config`: Model and LoRA configuration
-- `--training-config`: Training parameters (learning rate, batch size, etc.)
-- `--train-data`: Training dataset JSON file
-- `--val-data`: Validation dataset JSON file  
-- `--output-dir`: Where to save trained adapters
+- `--model-config`: Model and LoRA configuration (default: config/model_config.yaml)
+- `--training-config`: Training parameters (default: config/training_config.yaml)
+- `--train-data`: Training dataset JSON file (default: data/processed/train.json)
+- `--val-data`: Validation dataset JSON file (default: data/processed/val.json)
+- `--test-data`: Test dataset JSON file for reference (default: data/processed/test.json)
+- `--resume`: Resume training from last checkpoint
 
 ### 03_evaluate_model.py
 **Purpose**: Evaluate base model and runtime LoRA adapters
@@ -191,12 +192,12 @@ python scripts/03_evaluate_model.py \
   --base-model microsoft/Phi-3-mini-4k-instruct
 ```
 
-- `--config`: Evaluation configuration (metrics, temperature, etc.)
-- `--test-data`: Test dataset JSON file
-- `--adapters-path`: Directory containing trained adapters
-- `--base-model`: Base model path or HuggingFace model ID
-- `--model-path`: Evaluate specific model (optional)
-- `--compare-only`: Only compare existing evaluation results
+- `--config`: Evaluation configuration file (default: config/evaluation_config.yaml)
+- `--test-data`: Test dataset JSON file (default: data/processed/test.json)
+- `--adapters-path`: Directory containing trained adapters (default: models/adapters)
+- `--base-model`: Base model path or HuggingFace ID (default: microsoft/Phi-3-mini-4k-instruct)
+- `--model-path`: Evaluate a specific model path (optional)
+- `--compare-only`: Only compare existing evaluation results without re-evaluating
 
 ### 04_fuse_and_evaluate.py
 **Purpose**: Fuse adapters into base model and comprehensive evaluation
@@ -219,31 +220,68 @@ python scripts/04_fuse_and_evaluate.py \
   --output-path lora_fused_model
 ```
 
-- `--model-config`: Model configuration file
-- `--eval-config`: Evaluation configuration file
-- `--test-data`: Test dataset JSON file
-- `--base-model`: Base model path override
-- `--adapters-path`: Adapters directory override
-- `--output-path`: Where to save fused model
-- `--skip-fusion`: Skip fusion step (use existing fused model)
-- `--force-fusion`: Force fusion even if output exists
+- `--model-config`: Model configuration file (default: config/model_config.yaml)
+- `--eval-config`: Evaluation configuration file (default: config/evaluation_config.yaml)
+- `--test-data`: Test dataset JSON file (default: data/processed/test.json)
+- `--base-model`: Base model path override (optional)
+- `--adapters-path`: Adapters directory override (optional)
+- `--output-path`: Where to save fused model (optional)
+- `--skip-fusion`: Skip fusion step, use existing fused model
+- `--force-fusion`: Force fusion even if output directory already exists
 
-### 05_upload_model.py
-**Purpose**: Upload trained model to HuggingFace Hub
+### upload_model_to_hf.py
+**Purpose**: Upload LoRA adapters to HuggingFace Hub
 
 **What it does**:
-- Uploads fused model or adapters to HuggingFace
-- Creates model card with training details
-- Sets up repository with proper licensing
-- Includes usage examples and configuration
+- Validates LoRA adapter structure
+- Creates comprehensive model card with MLX usage instructions
+- Uploads adapter weights and configuration files
+- Provides loading instructions for both HuggingFace and local usage
 
 **Parameters**:
 ```bash
-python scripts/05_upload_model.py \
-  --repo-name "your-username/your-model" \
-  --model-path lora_fused_model \
-  --model-config config/model_config.yaml
+python scripts/upload_model_to_hf.py \
+  --repo-name "your-username/model-name-lora" \
+  --adapter-path models/adapters \
+  --include-checkpoints  # Optional: include training checkpoints
+  --private  # Optional: make repository private
+  --dry-run  # Optional: validate without uploading
 ```
+
+- `--adapter-path`: Path to LoRA adapters directory (default: models/adapters)
+- `--repo-name`: HuggingFace repository name (required)
+- `--include-checkpoints`: Include all training checkpoint files
+- `--private`: Make the repository private
+- `--dry-run`: Validate setup without actually uploading
+- `--token`: HuggingFace token (uses HF_TOKEN env var if not provided)
+
+### interactive_chat.py
+**Purpose**: Interactive chat interface with model comparison
+
+**What it does**:
+- Loads base model, LoRA runtime, and fused model (if available)
+- Generates responses from all models for comparison
+- Provides side-by-side response comparison
+- Supports both interactive and quick test modes
+
+**Parameters**:
+```bash
+python scripts/interactive_chat.py \
+  --mode compare \
+  --max-tokens 200 \
+  --temperature 0.7 \
+  --quick-test
+```
+
+- `--mode`: Single model or compare all models (default: compare)
+- `--model-path`: Path to model for single mode (default: models/fused)
+- `--base-model`: Base model path or HuggingFace ID (default: microsoft/Phi-3-mini-4k-instruct)
+- `--adapters-path`: Path to LoRA adapters (default: models/adapters)
+- `--fused-path`: Path to fused model (default: models/fused)
+- `--system-prompt`: Custom system prompt (optional)
+- `--max-tokens`: Maximum tokens to generate (default: 200)
+- `--temperature`: Sampling temperature (default: 0.7)
+- `--quick-test`: Run quick test with predefined questions
 
 ## 🔧 Advanced Usage
 
