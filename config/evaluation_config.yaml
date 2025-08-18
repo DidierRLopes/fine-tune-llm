@@ -1,0 +1,23 @@
+evaluation:
+  method: "simple"  # options: "simple", "bertscore"
+  max_tokens: 200
+  temperature: 0.7
+  
+metrics:
+  bertscore:
+    model_type: "microsoft/deberta-xlarge-mnli"
+    lang: "en"
+  simple:
+    word_overlap_threshold: 0.5
+    
+comparison:
+  compare_with_base: true
+  score_thresholds:
+    excellent: 0.9
+    good: 0.7
+    acceptable: 0.5
+    poor: 0.3
+    
+paths:
+  results_dir: "logs/evaluation"
+  test_data: "data/processed/test.json"

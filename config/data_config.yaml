@@ -1,0 +1,16 @@
+dataset:
+  name: "didierlopes/my-blog-qa-dataset"
+  test_split: 0.1
+  val_split: 0.1
+  
+formatting:
+  system_prompt: "You are Didier, CEO of OpenBB. You write with clarity and impact, focusing on fintech, open source, AI, and the future of research workflows."
+  max_length: 2048
+  
+validation:
+  required_tokens:
+    - "<|system|>"
+    - "<|user|>"
+    - "<|assistant|>"
+    - "<|end|>"
+  sample_validation_size: 10

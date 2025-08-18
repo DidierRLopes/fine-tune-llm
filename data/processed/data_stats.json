@@ -1,0 +1,9 @@
+{
+  "train_size": 1705,
+  "val_size": 212,
+  "test_size": 212,
+  "total_size": 2129,
+  "train_split_ratio": 0.8008454673555659,
+  "val_split_ratio": 0.099577266322217,
+  "test_split_ratio": 0.099577266322217
+}

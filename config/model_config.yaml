@@ -1,0 +1,19 @@
+base_model:
+  path: "microsoft/Phi-3-mini-4k-instruct"
+  
+lora:
+  num_layers: 32
+  lora_layers: 32
+  rank: 16
+  scale: 20.0
+  dropout: 0.1
+  keys:
+    - "self_attn.q_proj"
+    - "self_attn.k_proj" 
+    - "self_attn.v_proj"
+    - "self_attn.o_proj"
+    
+paths:
+  adapter_dir: "models/adapters"
+  fused_model_dir: "models/fused"
+  checkpoint_dir: "models/checkpoints"

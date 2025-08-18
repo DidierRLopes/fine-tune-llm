@@ -1,0 +1,18 @@
+training:
+  iters: 2000
+  batch_size: 4
+  learning_rate: 1e-5
+  steps_per_eval: 50
+  grad_checkpoint: true
+  
+optimizer:
+  type: "adam"
+  
+metrics:
+  patience: 5
+  min_delta: 0.001
+  
+paths:
+  train_data: "data/processed/train.json"
+  test_data: "data/processed/test.json"
+  logs_dir: "logs/training"

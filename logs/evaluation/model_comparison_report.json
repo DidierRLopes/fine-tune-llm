@@ -1,0 +1,32 @@
+{
+  "model_names": [
+    "base_model",
+    "lora_runtime"
+  ],
+  "word_overlap": [
+    {
+      "mean": 0.15742616167040632,
+      "std": 0.044256612098037745,
+      "median": 0.1586333720480062
+    },
+    {
+      "mean": 0.20082456537490942,
+      "std": 0.05909753453417394,
+      "median": 0.20245629897528633
+    }
+  ],
+  "bertscore_f1": [
+    null,
+    null
+  ],
+  "length_stats": [
+    {
+      "pred_mean_length": 864.5990566037735,
+      "ref_mean_length": 405.8490566037736
+    },
+    {
+      "pred_mean_length": 381.85849056603774,
+      "ref_mean_length": 405.8490566037736
+    }
+  ]
+}
