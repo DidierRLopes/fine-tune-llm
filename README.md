@@ -1,6 +1,6 @@
 # Fine-Tune LLM Pipeline
 
-A modular, production-ready pipeline for fine-tuning Large Language Models using LoRA (Low-Rank Adaptation) with MLX on Apple Silicon.
+A modular pipeline for fine-tuning Large Language Models using LoRA (Low-Rank Adaptation) with MLX on Apple Silicon.
 
 ## 🎯 Overview
 
